@@ -18,6 +18,7 @@ pub struct Config {
     pub claude: ClaudeConfig,
     pub codex: CodexConfig,
     pub update: UpdateConfig,
+    pub voice: VoiceConfig,
 }
 
 /// Automatically discovered Codex integration. Authentication stays in Codex.
@@ -223,6 +224,29 @@ pub struct UpdateConfig {
 impl Default for UpdateConfig {
     fn default() -> Self {
         UpdateConfig { check: true }
+    }
+}
+
+/// Speaking into a terminal: Ctrl+Shift+R records, whisper.cpp transcribes
+/// on this machine, and the words are typed at the prompt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VoiceConfig {
+    pub enabled: bool,
+    /// A Whisper language code (`en`, `he`, …), or `auto` to detect it.
+    pub language: String,
+    /// A whisper.cpp `ggml` model file. Empty means
+    /// `whisper/ggml-large-v3-turbo-q5_0.bin` in Giverny's directory.
+    pub model: String,
+}
+
+impl Default for VoiceConfig {
+    fn default() -> Self {
+        VoiceConfig {
+            enabled: true,
+            language: "auto".into(),
+            model: String::new(),
+        }
     }
 }
 

@@ -102,6 +102,16 @@ pub const BINDINGS: &[Binding] = &[
         scope: Scope::Global,
     },
     Binding {
+        chord: "Ctrl+Shift+R",
+        action: "voice: record for this terminal, again to stop; the words are typed, not sent",
+        scope: Scope::Global,
+    },
+    Binding {
+        chord: "Ctrl+Q",
+        action: "voice: stop recording (only while recording; otherwise it is the terminal's)",
+        scope: Scope::Global,
+    },
+    Binding {
         chord: "Ctrl+,",
         action: "settings",
         scope: Scope::Global,

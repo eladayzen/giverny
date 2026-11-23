@@ -34,4 +34,7 @@ Everything in `~/.config/giverny/config.toml`, and everything in the settings sc
 | `claude.skip_resume_summary` | `false` | Skip Claude Code's offer to resume from a summary, and resume the full session. |
 | `claude.resume_after_limit` | `false` | Pick a session back up when the usage window that stopped it reopens. |
 | `usage.refresh_minutes` | `10` | Ask Claude Code to refresh an account once its numbers are this old. 0 never asks. |
+| `voice.enabled` | `true` | Ctrl+Shift+R records, again or Ctrl+Q stops; the words are typed at the prompt, not sent. |
+| `voice.language` | `"auto"` | What you speak. auto detects it per recording; a fixed one is surer for short phrases. One of: auto, en, he, ar, ru, es, fr, de, it, pt, ja, zh. |
+| `voice.model` | `""` | A whisper.cpp ggml model file. Empty uses whisper/ggml-large-v3-turbo-q5_0.bin in Giverny's directory. |
 | `update.check` | `true` | Ask GitHub whether a newer Giverny exists, hourly while it is open. |

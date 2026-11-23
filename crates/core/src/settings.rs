@@ -24,6 +24,7 @@ pub enum Section {
     Restore,
     Claude,
     Codex,
+    Voice,
     Keys,
     Updates,
     About,
@@ -38,6 +39,7 @@ impl Section {
         Section::Restore,
         Section::Claude,
         Section::Codex,
+        Section::Voice,
         Section::Keys,
         Section::Updates,
         Section::About,
@@ -51,6 +53,7 @@ impl Section {
             Section::Restore => "restore",
             Section::Claude => "claude",
             Section::Codex => "codex",
+            Section::Voice => "voice",
             Section::Keys => "keys",
             Section::Updates => "updates",
             Section::About => "about",
@@ -580,6 +583,51 @@ pub const SETTINGS: &[SettingDef] = &[
         },
     },
     SettingDef {
+        key: "voice.enabled",
+        label: "voice input",
+        section: Section::Voice,
+        doc: "Ctrl+Shift+R records, again or Ctrl+Q stops; the words are typed at the prompt, \
+              not sent.",
+        note: &[
+            "Transcribed on this machine by whisper.cpp; no audio leaves it.",
+            "macOS asks for the microphone on first use, on behalf of the app",
+            "Giverny was started from.",
+        ],
+        needs_restart: false,
+        kind: Kind::Bool { default: true },
+    },
+    SettingDef {
+        key: "voice.language",
+        label: "language",
+        section: Section::Voice,
+        doc: "What you speak. auto detects it per recording; a fixed one is surer for \
+              short phrases.",
+        note: &[],
+        needs_restart: false,
+        kind: Kind::Choice {
+            default: "auto",
+            options: &[
+                "auto", "en", "he", "ar", "ru", "es", "fr", "de", "it", "pt", "ja", "zh",
+            ],
+        },
+    },
+    SettingDef {
+        key: "voice.model",
+        label: "whisper model",
+        section: Section::Voice,
+        doc: "A whisper.cpp ggml model file. Empty uses \
+              whisper/ggml-large-v3-turbo-q5_0.bin in Giverny's directory.",
+        note: &[
+            "Giverny never downloads one: it makes no network request but the",
+            "update check. Models: huggingface.co/ggerganov/whisper.cpp",
+        ],
+        needs_restart: false,
+        kind: Kind::Text {
+            default: "",
+            placeholder: "whisper/ggml-large-v3-turbo-q5_0.bin",
+        },
+    },
+    SettingDef {
         key: "update.check",
         label: "check for updates",
         section: Section::Updates,
@@ -826,6 +874,7 @@ mod tests {
         );
         assert_eq!(parsed.usage.refresh_minutes, defaults.usage.refresh_minutes);
         assert_eq!(parsed.update.check, defaults.update.check);
+        assert_eq!(parsed.voice, defaults.voice);
     }
 
     #[test]

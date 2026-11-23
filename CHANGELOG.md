@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Voice input.** `Ctrl+Shift+R` starts recording for the focused terminal
+  and stops it again, as does `Ctrl+Q` while recording; whisper.cpp
+  transcribes the take on this machine and the text is typed at that
+  terminal's prompt, without Enter, and left on the clipboard. A corner
+  badge shows the recording clock, then "transcribing". The next take can
+  start while the last is still transcribing; each lands in the terminal it
+  was recorded for. The model loads and warms the GPU as recording starts,
+  so the first take returns as fast as the rest (1.2 s for 4 s of speech on
+  an M5 Pro, against 7.4 s cold). `voice.enabled`, `voice.language` (`auto`
+  or a code) and `voice.model` in Settings → voice. Giverny downloads no
+  model; it still makes no request but the update check.
+
 ## v1.8.0 — 2026-11-17
 
 - **Splits.** `Ctrl+Shift+D` and `Ctrl+Shift+S` split the terminal right or

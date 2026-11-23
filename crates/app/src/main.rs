@@ -19,6 +19,7 @@ mod taskbar;
 mod titlebar;
 mod translucency;
 mod update;
+mod voice;
 mod walk;
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
 mod wayland_dnd;
@@ -986,6 +987,10 @@ pub enum Action {
     MoveToWindow(TabId, Option<usize>),
     /// Fold the rail away in this window, or bring it back.
     ToggleRail,
+    /// Start recording speech for a terminal, or stop the take in progress.
+    ToggleVoice(TabId),
+    /// Stop the take in progress, if there is one.
+    StopVoice,
     /// Put `tab` into `onto`'s split, beside it: its whole row, or only it.
     Join {
         tab: TabId,
@@ -1199,6 +1204,7 @@ pub struct App {
     /// A screenshot pasted with Ctrl+V (Cmd+V): read, saved and typed in as
     /// a path.
     paste_image: paste_image::ImagePaste,
+    voice: voice::Voice,
     /// Tab rows as painted this frame, so a drag can be aimed at one.
     pub row_rects: Vec<(egui::Rect, TabId)>,
     /// Each terminal's body on screen last frame, for drops aimed at one.
@@ -1785,6 +1791,7 @@ impl App {
             dnd: start_wayland_dnd(cc),
             drag_hover: None,
             paste_image: paste_image::ImagePaste::new(),
+            voice: voice::Voice::new(),
             row_rects: Vec::new(),
             pane_rects: Vec::new(),
             pane_areas: Vec::new(),
@@ -2025,6 +2032,10 @@ impl App {
             Action::NewWindow => self.open_window(ctx, None),
             Action::MoveToWindow(tab, Some(n)) => self.move_to_window(ctx, tab, n),
             Action::MoveToWindow(tab, None) => self.open_window(ctx, Some(tab)),
+            Action::ToggleVoice(id) => {
+                self.voice.toggle(id, &self.cfg.voice, self.paths.base());
+            }
+            Action::StopVoice => self.voice.stop(&self.cfg.voice, self.paths.base()),
             Action::ToggleRail => {
                 self.rail_hidden = !self.rail_hidden;
                 if self.current_window.is_none() {
@@ -3327,6 +3338,26 @@ impl App {
         }
     }
 
+    /// Type what was said into the terminal it was recorded for, as a paste
+    /// types it, and leave it on the clipboard too: a take whose terminal
+    /// closed meanwhile can still be pasted somewhere. Never followed by
+    /// Enter, and no tab switch.
+    fn deliver_voice(&mut self, ctx: &egui::Context) {
+        for heard in self.voice.poll(&self.cfg.voice, self.paths.base()) {
+            if let Some(session) = self.rt.get(&heard.tab).and_then(|rt| rt.session.as_ref()) {
+                session.write(giverny_term::input::encode_paste(
+                    &heard.text,
+                    session.mode(),
+                ));
+                session.note_user_input();
+            }
+            ctx.copy_text(heard.text);
+        }
+        if self.voice.busy() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
+    }
+
     /// The tab whose rail row contains a point, if any.
     pub fn tab_at(&self, pos: egui::Pos2) -> Option<TabId> {
         self.row_rects
@@ -4225,6 +4256,9 @@ impl App {
                     );
                 }
                 grid_rect = Some(response.rect);
+                if let Some(badge) = self.voice.badge(tab) {
+                    voice::paint_badge(ui.painter(), response.rect, &badge, &self.chrome);
+                }
                 if rt.view.paste_image {
                     self.paste_image.request(ctx, tab);
                 }
@@ -4746,6 +4780,16 @@ impl App {
             if i.consume_key(cs, Key::B) {
                 actions.push(Action::ToggleRail);
             }
+            if let Some(id) = self.ws.active
+                && i.consume_key(cs, Key::R)
+            {
+                actions.push(Action::ToggleVoice(id));
+            }
+            // Ctrl+Q is the terminal's own key the rest of the time; it is
+            // taken only while a take is running, to stop it.
+            if self.voice.recording() && i.consume_key(Modifiers::CTRL, Key::Q) {
+                actions.push(Action::StopVoice);
+            }
             if let Some(id) = self.ws.active {
                 use giverny_core::panes::{Axis, Direction};
                 if i.consume_key(cs, Key::D) {
@@ -4889,6 +4933,7 @@ impl eframe::App for App {
         self.periodic_refresh(&ctx);
         self.handle_dropped_files(&ctx);
         self.deliver_pasted_images();
+        self.deliver_voice(&ctx);
         self.process_pending(&ctx);
 
         // Claude awareness: hooks + registry + usage.

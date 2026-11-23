@@ -41,6 +41,10 @@ arboard = { version = "3.6", default-features = false, features = ["image-data"]
 tempfile = "3"
 png = "0.18"
 base64 = "0.22"
+# Speaking into a terminal (src/voice.rs): the microphone, and whisper.cpp to
+# transcribe it on this machine. whisper.cpp is built from source with cmake.
+cpal = "0.18"
+whisper-rs = { version = "0.16", features = ["tracing_backend"] }
 
 # Wayland drag-and-drop, which winit 0.30 does not implement. It arrives
 # through the clipboard crate eframe already uses — patched in the workspace
@@ -68,6 +72,8 @@ winresource = "0.1"
 # The dock badge: the Mac equivalent of the taskbar overlay below. Same
 # versions winit already pulls in, so this adds no new tree.
 [target.'cfg(target_os = "macos")'.dependencies]
+# whisper.cpp on the GPU: a take transcribes in a fraction of its length.
+whisper-rs = { version = "0.16", features = ["tracing_backend", "metal"] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", features = ["NSApplication", "NSDockTile"] }
 objc2-foundation = "0.3"
