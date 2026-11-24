@@ -4256,8 +4256,26 @@ impl App {
                     );
                 }
                 grid_rect = Some(response.rect);
-                if let Some(badge) = self.voice.badge(tab) {
-                    voice::paint_badge(ui.painter(), response.rect, &badge, &self.chrome);
+                if self.cfg.voice.enabled {
+                    if let Some(badge) = self.voice.badge(tab) {
+                        voice::paint_badge(ui.painter(), response.rect, &badge, &self.chrome);
+                    }
+                    let recording = self.voice.recording_for(tab);
+                    if voice::button(ui, response.rect, tab, recording, &self.chrome) {
+                        if self.voice.recording() && !recording {
+                            // A take runs for another terminal: this stops
+                            // it, and its words still go where it started.
+                            actions.push(Action::StopVoice);
+                        } else {
+                            // Into another terminal of the split: the
+                            // keyboard follows, to fix the words and send.
+                            if !focused {
+                                actions.push(Action::Select(tab));
+                            }
+                            actions.push(Action::ToggleVoice(tab));
+                        }
+                        self.focus_terminal = true;
+                    }
                 }
                 if rt.view.paste_image {
                     self.paste_image.request(ctx, tab);

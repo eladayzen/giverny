@@ -235,6 +235,11 @@ impl Voice {
         self.take.is_some() || !self.queued.is_empty() || self.notice.is_some()
     }
 
+    /// Whether the take in progress is `tab`'s.
+    pub fn recording_for(&self, tab: TabId) -> bool {
+        self.take.as_ref().is_some_and(|t| t.tab == tab)
+    }
+
     pub fn badge(&self, tab: TabId) -> Option<Badge> {
         if let Some(take) = self.take.as_ref().filter(|t| t.tab == tab) {
             return Some(Badge::Recording(take.started.elapsed()));
@@ -460,16 +465,88 @@ fn transcribe(loaded: &mut Loaded, job: &Job) -> Result<String, String> {
     Ok(tidy(segments.iter().map(String::as_str)))
 }
 
+/// The round button's diameter, and its distance from the grid's corner.
+const BUTTON: f32 = 22.0;
+const BUTTON_MARGIN: f32 = 10.0;
+
+/// The microphone button in a terminal's bottom-right corner: a microphone
+/// to start recording for this terminal, a stop square while it records.
+/// Quiet until the pointer is over it, so it does not sit on the text.
+/// Returns whether it was clicked.
+pub fn button(ui: &egui::Ui, grid: egui::Rect, tab: TabId, recording: bool, c: &Chrome) -> bool {
+    let center = grid.right_bottom() - egui::Vec2::splat(BUTTON_MARGIN + BUTTON / 2.0);
+    let rect = egui::Rect::from_center_size(center, egui::Vec2::splat(BUTTON));
+    let resp = ui
+        .interact(
+            rect,
+            ui.id().with(("voice-button", tab.0)),
+            egui::Sense::click(),
+        )
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(if recording {
+            "stop recording (Ctrl+Q)"
+        } else {
+            "record your voice into this terminal (Ctrl+Shift+R)"
+        });
+    let p = ui.painter();
+    let hot = resp.hovered();
+    if recording {
+        p.circle_filled(center, BUTTON / 2.0, c.poppy);
+        let square = egui::Rect::from_center_size(center, egui::Vec2::splat(8.0));
+        p.rect_filled(square, 1.5, Color32::WHITE);
+        if hot {
+            p.circle_stroke(center, BUTTON / 2.0 + 1.5, egui::Stroke::new(1.0, c.fg));
+        }
+    } else {
+        let (fill, ink) = if hot {
+            (c.panel, c.fg)
+        } else {
+            (c.panel.gamma_multiply(0.6), c.dim.gamma_multiply(0.7))
+        };
+        p.circle_filled(center, BUTTON / 2.0, fill);
+        p.circle_stroke(
+            center,
+            BUTTON / 2.0,
+            egui::Stroke::new(1.0, ink.gamma_multiply(0.6)),
+        );
+        paint_mic(p, center, ink);
+    }
+    resp.clicked()
+}
+
+/// A microphone drawn in strokes: the capsule, the cradle under it, the
+/// stem and its foot.
+fn paint_mic(p: &egui::Painter, center: egui::Pos2, ink: Color32) {
+    let stroke = egui::Stroke::new(1.4, ink);
+    let capsule = egui::Rect::from_center_size(center - egui::vec2(0.0, 2.0), egui::vec2(5.0, 8.5));
+    p.rect_filled(capsule, 2.5, ink);
+    let cradle_c = center - egui::vec2(0.0, 1.5);
+    let r = 4.5;
+    let points: Vec<egui::Pos2> = (0..=12)
+        .map(|k| {
+            let a = std::f32::consts::PI * k as f32 / 12.0;
+            cradle_c + egui::vec2(r * a.cos(), r * a.sin())
+        })
+        .collect();
+    p.add(egui::Shape::line(points, stroke));
+    let stem_top = cradle_c + egui::vec2(0.0, r);
+    p.line_segment([stem_top, stem_top + egui::vec2(0.0, 2.5)], stroke);
+    p.line_segment(
+        [
+            stem_top + egui::vec2(-2.5, 2.5),
+            stem_top + egui::vec2(2.5, 2.5),
+        ],
+        stroke,
+    );
+}
+
 /// The badge in a terminal's corner: the recording clock, "transcribing",
 /// or a notice.
 pub fn paint_badge(painter: &egui::Painter, grid: egui::Rect, badge: &Badge, c: &Chrome) {
     let (dot, text) = match badge {
         Badge::Recording(held) => {
             let secs = held.as_secs();
-            (
-                Some(c.poppy),
-                format!("rec {}:{:02} · Ctrl+Q stops", secs / 60, secs % 60),
-            )
+            (Some(c.poppy), format!("rec {}:{:02}", secs / 60, secs % 60))
         }
         Badge::Transcribing => (Some(c.amber), "transcribing…".into()),
         Badge::Notice(text) => (None, format!("voice: {text}")),
@@ -479,7 +556,13 @@ pub fn paint_badge(painter: &egui::Painter, grid: egui::Rect, badge: &Badge, c: 
     let pad = egui::vec2(8.0, 4.0);
     let dot_w = if dot.is_some() { 12.0 } else { 0.0 };
     let size = galley.size() + pad * 2.0 + egui::vec2(dot_w, 0.0);
-    let rect = egui::Rect::from_min_size(grid.right_bottom() - size - egui::vec2(10.0, 10.0), size);
+    // To the left of the button, its middle level with the button's.
+    let right_bottom = grid.right_bottom()
+        - egui::vec2(
+            BUTTON_MARGIN + BUTTON + 6.0,
+            BUTTON_MARGIN + (BUTTON - size.y) / 2.0,
+        );
+    let rect = egui::Rect::from_min_size(right_bottom - size, size);
     painter.rect_filled(rect, 4.0, c.panel);
     painter.rect_stroke(
         rect,
